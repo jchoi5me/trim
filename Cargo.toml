@@ -1,0 +1,15 @@
+[package]
+name = "trim"
+version = "0.1.0"
+authors = ["Jack <jchoi5@me.com>"]
+edition = "2018"
+description = "trim whitespaces from files"
+repository = "https://github.com/jchoi5me/trim"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansi_term = "0.11"
+regex = "1"
+structopt = "0.2"
