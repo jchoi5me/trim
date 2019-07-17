@@ -19,54 +19,58 @@ struct Opt {
     pub output: Option<PathBuf>,
 }
 
+/// get an interator that reads from a file line by line
 fn lines_from_file<'a>(file_name: &'a PathBuf) -> impl Iterator<Item = String> + 'a {
     let file = File::open(file_name).unwrap();
     BufReader::new(file).lines().map(Result::unwrap)
 }
 
+/// get the cleaned version of a file's content
 fn handle_input_file<'a>(file_name: &PathBuf) -> Box<String> {
-    let lines = lines_from_file(file_name);
-    trim_lines(lines)
-}
-
-fn trim_lines(lines: impl Iterator<Item = String>) -> Box<String> {
-    let trailing_ws = Regex::new(r"\s+$").unwrap();
-    let trimmed_lines = lines
-        .map(|line| trailing_ws.replacen(&line, 1, "").to_string() + "\n")
+    // rtrim each line
+    let trimmed_lines = lines_from_file(file_name)
+        .map(|line| *rtrim(&line) + "\n")
         .collect::<String>();
 
-    Box::new(trailing_ws.replacen(&trimmed_lines, 1, "").to_string())
+    // remove all trailing newlines
+    rtrim(&trimmed_lines)
+}
+
+fn rtrim(source: &String) -> Box<String> {
+    let trailing_ws = Regex::new(r"\s+$").unwrap();
+    let rtrimmed = trailing_ws.replacen(&source, 1, "").to_string();
+    Box::new(rtrimmed)
 }
 
 fn visualize(file_name: &PathBuf) -> Box<String> {
     let trailing_ws = Regex::new(r"\s*$").unwrap();
     let lines = lines_from_file(file_name)
         .enumerate()
-        .filter_map(|(i, line)| {
+        .filter_map(|(index, line)| {
             let start_end = trailing_ws.find(&line).unwrap();
             let ws_start = start_end.start();
             let ws_end = start_end.end();
-            match ws_start == ws_end {
-                true => None,
-                false => {
-                    let ws = (ws_start..ws_end).map(|_| "_").collect::<String>();
-                    let ws = Style::new().on(Red).fg(Red).paint(ws);
-                    let line_number = i + 1;
-                    let keep = &line[..ws_start];
-                    let highlighted = format!("{}{}", keep, ws);
-                    Some((line_number, highlighted))
-                }
+            if ws_start == ws_end {
+                None
+            } else {
+                let ws = (ws_start..ws_end).map(|_| "_").collect::<String>();
+                let ws = Style::new().on(Red).fg(Red).paint(ws);
+                let line_number = index + 1;
+                let keep = &line[..ws_start];
+                let highlighted = format!("{}{}", keep, ws);
+                Some((line_number, highlighted))
             }
         })
-        .map(|(i, line)| {
-            let num_padding = 4 - (i / 10);
+        .map(|(line_number, line)| {
+            let num_digits = (line_number as f64).log10().floor() as i64; // TODO increase from 4
+            assert!(num_digits >= 0);
+            let num_padding = 4 - num_digits;
             let padding = (0..num_padding).map(|_| " ").collect::<String>();
-            format!("{}{}| {}", padding, i, line)
+            format!("{}{}| {}\n", padding, line_number, line)
         })
-        .collect::<Vec<String>>()
-        .join("\n");
+        .collect::<String>();
 
-    Box::new(trailing_ws.replacen(&lines, 1, "").to_string())
+    rtrim(&lines)
 }
 
 fn main() {
