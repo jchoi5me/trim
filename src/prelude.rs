@@ -18,12 +18,12 @@ pub fn readlines<'a>(path: &'a PathBuf) -> impl Iterator<Item = String> + 'a {
 /// 1. remove the trailing whitespace from each line
 /// 2. join these line with `\n`, and remove the trailing whitespace
 pub fn clean(lines: impl Iterator<Item = String>) -> Box<String> {
-    let trailing_ws = Regex::new(TRAILING_WS).unwrap();
-    let rtrim_n = |s: String| trailing_ws.replacen(&s, 1, "\n").to_string();
+    let t_ws = Regex::new(TRAILING_WS).unwrap();
+    let rtrim_w = |s: String, with: &str| t_ws.replace(&s, with).to_string();
     // rtrim each line
-    let trimmed_lines = lines.map(rtrim_n).collect::<String>();
+    let trimmed_lines = lines.map(|s| rtrim_w(s, "\n")).collect::<String>();
     // rtrim the concat result
-    Box::new(rtrim_n(trimmed_lines))
+    Box::new(rtrim_w(trimmed_lines, ""))
 }
 
 fn red_padding_with_len(length: usize) -> impl Display {
