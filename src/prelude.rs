@@ -6,59 +6,72 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-const TRAILING_WS: &str = r"\s*$";
+pub struct TrimResult {
+    /// cleaned output mentioned above
+    pub trimmed: Box<String>,
+    /// visualization of the cleaning process
+    pub visualized: Box<String>,
+    /// number of bytes saved through the cleaning
+    pub saved_bytes: usize,
+}
 
 /// Return an iterator that iterates through a file line by line.
-pub fn readlines<'a>(path: &'a PathBuf) -> impl Iterator<Item = String> + 'a {
+pub fn readlines(path: &PathBuf) -> impl Iterator<Item = String> {
     let file = File::open(path).unwrap();
     BufReader::new(file).lines().map(Result::unwrap)
 }
 
 /// Clean the given lines using the following rules:
 /// 1. remove the trailing whitespace from each line
-/// 2. join these line with `\n`, and remove the trailing whitespace
-pub fn clean(lines: impl Iterator<Item = String>) -> Box<String> {
-    let t_ws = Regex::new(TRAILING_WS).unwrap();
-    let rtrim_w = |s: String, with: &str| t_ws.replace(&s, with).to_string();
-    // rtrim each line
-    let trimmed_lines = lines.map(|s| rtrim_w(s, "\n")).collect::<String>();
-    // rtrim the concat result
-    Box::new(rtrim_w(trimmed_lines, ""))
+/// 2. join these line with `\n`, and replace the trailing whitespace with `\n`
+pub fn clean(lines: impl Iterator<Item = String>) -> TrimResult {
+    let t_ws = Regex::new(r"\s*$").unwrap();
+    let rtrim_w = |src: &String, w: &str| t_ws.replace(&src, w).to_string();
+
+    let result: Vec<(String, Option<String>, usize)> = lines
+        .enumerate()
+        .map(|(index, line)| (index + 1, line)) // 1-base now
+        .map(|(line_number, line)| {
+            let trimmed_line = rtrim_w(&line, "\n");
+            let padding_length = match trimmed_line.len() < line.len() {
+                true => line.len() - trimmed_line.len(),
+                false => 0,
+            };
+            let visual_line = match padding_length > 0 {
+                true => {
+                    let padding = red_padding_with_len(padding_length);
+                    Some(format!(
+                        "{:>6}|{}{}\n",
+                        line_number,
+                        rtrim_w(&trimmed_line, ""),
+                        padding
+                    ))
+                }
+                false => None,
+            };
+
+            (trimmed_line, visual_line, padding_length)
+        })
+        .collect();
+
+    let lines_trimmed: String = result.iter().cloned().map(|t| t.0).collect();
+    let end_trimmed = rtrim_w(&lines_trimmed, "\n");
+    let visual = result
+        .iter()
+        .cloned()
+        .map(|t| t.1)
+        .filter(Option::is_some)
+        .map(Option::unwrap)
+        .collect();
+
+    TrimResult {
+        trimmed: Box::new(end_trimmed),
+        visualized: Box::new(visual),
+        saved_bytes: result.iter().map(|t| &t.2).sum(),
+    }
 }
 
 fn red_padding_with_len(length: usize) -> impl Display {
-    let padding = (0..length).map(|_| "_").collect::<String>();
+    let padding: String = (0..length).map(|_| "_").collect();
     Style::new().on(Red).fg(Red).paint(padding)
-}
-
-///
-pub fn visualize(path: &PathBuf, trimmed: &Box<String>) -> Box<String> {
-    let lines: Vec<String> = readlines(path).collect();
-    let trimmed_lines: Vec<String> = trimmed.split("\n").map(String::from).collect();
-
-    let header = (0..1).map(|_| format!("{:>6}|{:?}\n", "file", path));
-    let body_lines = lines
-        .iter()
-        .zip(trimmed_lines.iter())
-        .enumerate()
-        .map(|(i, (j, k))| (i + 1, (j, k)))
-        .filter(|(_, (line, trimmed))| line.len() != trimmed.len())
-        .map(|(line_number, (line, trimmed))| {
-            let padding_length = line.len() - trimmed.len();
-            let padding = red_padding_with_len(padding_length);
-            format!("{:>6}|{}{}\n", line_number, trimmed, padding)
-        });
-
-    let tail_lines = lines
-        .iter()
-        .enumerate()
-        .skip(trimmed_lines.len())
-        .map(|(i, j)| (i + 1, j))
-        .map(|(line_number, line)| {
-            let padding_length = line.len();
-            let padding = red_padding_with_len(padding_length);
-            format!("{:>6}|{}\n", line_number, padding)
-        });
-
-    Box::new(header.chain(body_lines).chain(tail_lines).collect())
 }

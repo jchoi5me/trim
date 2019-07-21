@@ -1,5 +1,4 @@
-use rayon::prelude::*;
-use std::fs;
+use std::io::{stdin, BufRead};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -10,38 +9,44 @@ use prelude::*;
 #[derive(StructOpt, Debug)]
 #[structopt(name = "trim")]
 struct Opt {
-    /// Files to trim. If empty or is '-', stdin will be used instead.
+    /// Files to trim. If empty or is '-', stdin will be used to grab lines.
     #[structopt(parse(from_os_str))]
     pub files: Vec<PathBuf>,
 }
 
-fn handle_file(file: &PathBuf) -> (Box<String>, Box<String>) {
-    let output = clean(readlines(&file));
+fn handle_file(file: &PathBuf) -> TrimResult {
+    handle_iter(readlines(file))
+}
 
-    // STDERR print how mant bytes were removed
-    let old_file_size = fs::metadata(&file).unwrap().len() as f64;
-    let new_file_size = output.len() as f64 + 1.0;
+fn handle_iter(lines: impl Iterator<Item = String>) -> TrimResult {
+    clean(lines)
+}
 
-    let vis_output = Box::new(format!(
-        "{}\n{:?}: {} -> {} ({:.2}%)",
-        visualize(&file, &output),
-        file,
-        old_file_size,
-        new_file_size,
-        new_file_size / old_file_size * 100.0
-    ));
-
-    (output, vis_output)
+fn report(tr: TrimResult) {
+    let original_len = tr.trimmed.len() + tr.saved_bytes;
+    print!("{}", tr.trimmed);
+    eprintln!(
+        "{}\n{} -> {} ({:.2} %)",
+        tr.visualized,
+        original_len,
+        tr.trimmed.len(),
+        100.0 * (1.0 - tr.saved_bytes as f64 / original_len as f64)
+    );
 }
 
 fn main() {
-    let opt = Opt::from_args();
+    let args = Opt::from_args();
 
-    opt.files
-        .par_iter()
-        .map(handle_file)
-        .for_each(|(result, vis_result)| {
-            print!("{}", result);
-            eprintln!("{}", vis_result);
-        });
+    // if 0 files is provided or `-` is the only, then use stdin
+    let use_stdin = match args.files.get(0) {
+        None => true,
+        Some(path) if path.to_str() == Some("-") => true,
+        _ => false,
+    };
+    if use_stdin {
+        let result = handle_iter(stdin().lock().lines().map(Result::unwrap));
+        report(result);
+    } else {
+        args.files.iter().map(handle_file).for_each(report)
+    };
 }
