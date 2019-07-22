@@ -56,6 +56,9 @@ pub fn clean(lines: impl Iterator<Item = String>) -> TrimResult {
 
     let lines_trimmed: String = result.iter().cloned().map(|t| t.0).collect();
     let end_trimmed = rtrim_w(&lines_trimmed, "\n");
+    let saved_from_lines: usize = result.iter().map(|t| &t.2).sum();
+    let saved_from_end = lines_trimmed.len() - end_trimmed.len();
+
     let visual = result
         .iter()
         .cloned()
@@ -67,7 +70,7 @@ pub fn clean(lines: impl Iterator<Item = String>) -> TrimResult {
     TrimResult {
         trimmed: Box::new(end_trimmed),
         visualized: Box::new(visual),
-        saved_bytes: result.iter().map(|t| &t.2).sum(),
+        saved_bytes: saved_from_lines + saved_from_end,
     }
 }
 
