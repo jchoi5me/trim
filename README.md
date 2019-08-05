@@ -4,6 +4,13 @@
 
 `trim` was inspired by the auto-trimming feature of [Atom](https://atom.io/), where trailing whitespace of every line is removed, and trailing newlines are replaced with a single newline.
 
+## Table of Contents
+
+1. [trim](#trim)
+    1. [Overview](#overview)
+
+## Overview
+
 ```bash
 ~
   $ trim --help
