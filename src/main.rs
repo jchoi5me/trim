@@ -110,19 +110,23 @@ where
 fn main() {
     let args = Opt::from_args();
 
-    let path = args.file.unwrap();
-    let use_stdin = false;
+    let (opt_path, use_stdin) = match args.file {
+        Some(path) if path.to_str() == Some("-") => (None, true),
+        Some(path) => (Some(path), false),
+        None => (None, true),
+    };
 
     if use_stdin {
         handle(stdin().lock().lines());
     } else {
-        match readlines(&path) {
-            Ok(lines) => match handle(lines) {
-                Ok(result) => println!("{:?}", result),
-                Err(err) => eprintln!("{:?}", err),
-            },
-            Err(err) => eprintln!("{:?}", err),
-        }
+        //match
+        handle(readlines(&opt_path.unwrap()).unwrap()); /*{
+                                                            Ok(lines) => match handle(lines) {
+                                                                Ok(result) => println!("{:?}", result),
+                                                                Err(err) => eprintln!("{:?}", err),
+                                                            },
+                                                            Err(err) => eprintln!("{:?}", err),
+                                                        }*/
     };
 }
 
