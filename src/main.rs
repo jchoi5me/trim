@@ -5,13 +5,18 @@ use regex::Regex;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fs::File;
+use std::io;
+use std::io::stderr;
 use std::io::stdin;
+use std::io::stdout;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Error;
 use std::io::ErrorKind;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::from_utf8;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -40,9 +45,18 @@ fn red_padding_with_len(length: usize) -> impl Display {
     Style::new().on(Red).fg(White).paint(padding)
 }
 
-fn handle_iter<I>(lines: I) -> Result<(), Error>
+fn handle<I>(lines: I) -> Result<(), Error>
 where
     I: Iterator<Item = Result<String, Error>>,
+{
+    handle_custom(lines, &mut stdout().lock(), &mut stderr().lock())
+}
+
+fn handle_custom<I, W1, W2>(lines: I, out: &mut W1, err: &mut W2) -> Result<(), Error>
+where
+    I: Iterator<Item = Result<String, Error>>,
+    W1: Write,
+    W2: Write,
 {
     let t_ws = Regex::new(r"\s*$").map_err(io_err)?;
     let rtrim_w = |src: &str, w: &str| t_ws.replace(&src, w).to_string();
@@ -72,20 +86,23 @@ where
 
             (trimmed_line, opt_visual_line)
         })
-        .fold((0usize), |newline_count, (line, opt_vis)| {
-            match line.len() {
-                0 => newline_count + 1,
+        .fold(
+            Ok(0usize),
+            |newline_count: Result<usize, Error>, (line, opt_vis)| match line.len() {
+                0 => newline_count.map(|count| count + 1),
                 _ => {
-                    let newlines: String = (0..newline_count).map(|_| "\n").collect();
-                    print!("{}", newlines);
-                    println!("{}", line);
+                    let newlines: String = (0..newline_count.unwrap()).map(|_| "\n").collect();
+                    write!(out, "{}", newlines)?;
+                    write!(out, "{}\n", line)?;
                     if let Some(vis) = opt_vis {
-                        eprintln!("{}", vis);
+                        write!(err, "{}\n", vis)?;
                     }
-                    0
+                    Ok(0)
                 }
-            }
-        });
+            },
+        );
+    out.flush()?;
+    err.flush()?;
 
     Ok(())
 }
@@ -97,14 +114,42 @@ fn main() {
     let use_stdin = false;
 
     if use_stdin {
-        handle_iter(stdin().lock().lines());
+        handle(stdin().lock().lines());
     } else {
         match readlines(&path) {
-            Ok(lines) => match handle_iter(lines) {
+            Ok(lines) => match handle(lines) {
                 Ok(result) => println!("{:?}", result),
                 Err(err) => eprintln!("{:?}", err),
             },
             Err(err) => eprintln!("{:?}", err),
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rayon::prelude::*;
+
+    fn test_data() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("", ""),
+            ("abc", "abc\n"),
+            ("   absoi ", "   absoi\n"),
+            ("ab \ncd \n  \n\n  \n", "ab\ncd\n"),
+        ]
+    }
+
+    #[test]
+    fn parametrized() {
+        test_data().into_iter().for_each(|(input, expected)| {
+            let lines = input.split('\n').map(String::from).map(|s| Ok(s));
+            let mut out = Vec::new();
+            let mut err = Vec::new();
+
+            handle_custom(lines, &mut out, &mut err).unwrap();
+
+            assert_eq!(expected.as_bytes(), &out[..]);
+        });
+    }
 }
