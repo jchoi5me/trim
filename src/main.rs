@@ -2,11 +2,9 @@ use ansi_term::Colour::Red;
 use ansi_term::Colour::White;
 use ansi_term::Style;
 use regex::Regex;
-use std::cmp::max;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fs::File;
-use std::io;
 use std::io::stderr;
 use std::io::stdin;
 use std::io::stdout;
@@ -17,7 +15,6 @@ use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::from_utf8;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -60,39 +57,39 @@ where
     W2: Write,
 {
     let t_ws = Regex::new(r"\s*$").map_err(io_err)?;
-    let rtrim_w = |src: &str, w: &str| t_ws.replace(&src, w).to_string();
+    let rtrim_w = |src: &str| t_ws.replace(src, "").to_string();
 
     lines
         .map(Result::unwrap)
         .enumerate()
         .map(|(index, line)| (index + 1, line))
         .map(|(line_number, line)| {
-            let trimmed_line = rtrim_w(&line, "");
-            let opt_visual_line = Some(line.len() - trimmed_line.len())
+            let trimmed_line = rtrim_w(&line);
+            let opt_visual = Some(line.len() - trimmed_line.len())
                 .filter(|x| x > &0)
                 .map(red_padding_with_len)
                 .map(|padding| format!("{:>6}|{}{}", line_number, trimmed_line, padding));
-            (trimmed_line, opt_visual_line)
+            (trimmed_line, opt_visual)
         })
         .fold(
             Ok(0usize),
-            |opt_newline_count: Result<usize, Error>, (line, opt_vis)| match &opt_newline_count {
+            |opt_lf_count: Result<usize, Error>, (line, opt_vis)| match &opt_lf_count {
                 Ok(count) if line.len() == 0 => Ok(count + 1),
                 Ok(count) => {
-                    let newlines: String = (0..*count).map(|_| "\n").collect();
-                    write!(out, "{}", newlines)?;
-                    write!(out, "{}\n", line)?;
+                    let lfs: String = (0..*count).map(|_| "\n").collect();
+                    write!(out, "{}", lfs)?; // accumulated line feeds
+                    write!(out, "{}\n", line)?; // actual line
                     if let Some(vis) = opt_vis {
                         write!(err, "{}\n", vis)?;
                     }
                     Ok(0)
                 }
-                Err(err) => opt_newline_count,
+                Err(_) => opt_lf_count,
             },
-        );
+        )?;
+
     out.flush()?;
     err.flush()?;
-
     Ok(())
 }
 
@@ -105,18 +102,14 @@ fn main() {
         None => (None, true),
     };
 
-    if use_stdin {
-        handle(stdin().lock().lines());
-    } else {
-        //match
-        handle(readlines(&opt_path.unwrap()).unwrap()); /*{
-                                                            Ok(lines) => match handle(lines) {
-                                                                Ok(result) => println!("{:?}", result),
-                                                                Err(err) => eprintln!("{:?}", err),
-                                                            },
-                                                            Err(err) => eprintln!("{:?}", err),
-                                                        }*/
+    let result = match use_stdin {
+        true => handle(stdin().lock().lines()),
+        false => handle(readlines(&opt_path.unwrap()).unwrap()),
     };
+    match result {
+        Ok(_) => (),
+        Err(err) => eprintln!("{}", err),
+    }
 }
 
 #[cfg(test)]
@@ -135,7 +128,7 @@ mod tests {
 
     #[test]
     fn parametrized() {
-        test_data().into_iter().for_each(|(input, expected)| {
+        test_data().into_par_iter().for_each(|(input, expected)| {
             let lines = input.split('\n').map(String::from).map(|s| Ok(s));
             let mut out = Vec::new();
             let mut err = Vec::new();
