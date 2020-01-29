@@ -2,6 +2,7 @@ use ansi_term::Colour::Red;
 use ansi_term::Colour::White;
 use ansi_term::Style;
 use regex::Regex;
+use std::cmp::max;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fs::File;
@@ -61,37 +62,24 @@ where
     let t_ws = Regex::new(r"\s*$").map_err(io_err)?;
     let rtrim_w = |src: &str, w: &str| t_ws.replace(&src, w).to_string();
 
-    let newline_count = lines
+    lines
         .map(Result::unwrap)
         .enumerate()
         .map(|(index, line)| (index + 1, line))
         .map(|(line_number, line)| {
             let trimmed_line = rtrim_w(&line, "");
-            let padding_length = match trimmed_line.len() < line.len() {
-                true => line.len() - trimmed_line.len(),
-                false => 0,
-            };
-            let opt_visual_line = match padding_length > 0 {
-                true => {
-                    let padding = red_padding_with_len(padding_length);
-                    Some(format!(
-                        "{:>6}|{}{}",
-                        line_number,
-                        rtrim_w(&trimmed_line, ""),
-                        padding
-                    ))
-                }
-                false => None,
-            };
-
+            let opt_visual_line = Some(line.len() - trimmed_line.len())
+                .filter(|x| x > &0)
+                .map(red_padding_with_len)
+                .map(|padding| format!("{:>6}|{}{}", line_number, trimmed_line, padding));
             (trimmed_line, opt_visual_line)
         })
         .fold(
             Ok(0usize),
-            |newline_count: Result<usize, Error>, (line, opt_vis)| match line.len() {
-                0 => newline_count.map(|count| count + 1),
-                _ => {
-                    let newlines: String = (0..newline_count.unwrap()).map(|_| "\n").collect();
+            |opt_newline_count: Result<usize, Error>, (line, opt_vis)| match &opt_newline_count {
+                Ok(count) if line.len() == 0 => Ok(count + 1),
+                Ok(count) => {
+                    let newlines: String = (0..*count).map(|_| "\n").collect();
                     write!(out, "{}", newlines)?;
                     write!(out, "{}\n", line)?;
                     if let Some(vis) = opt_vis {
@@ -99,6 +87,7 @@ where
                     }
                     Ok(0)
                 }
+                Err(err) => opt_newline_count,
             },
         );
     out.flush()?;
