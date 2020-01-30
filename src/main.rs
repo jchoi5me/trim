@@ -155,7 +155,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rayon::prelude::*;
 
     fn test_data() -> Vec<(&'static str, &'static str)> {
         vec![
@@ -168,7 +167,7 @@ mod tests {
 
     #[test]
     fn parametrized() {
-        test_data().into_par_iter().for_each(|(input, expected)| {
+        test_data().into_iter().for_each(|(input, expected)| {
             let lines = input.split('\n').map(String::from).map(|s| Ok(s));
             let mut out = Vec::new();
             let mut err = Vec::new();
