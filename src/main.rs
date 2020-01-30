@@ -2,9 +2,11 @@ use ansi_term::Colour::Red;
 use ansi_term::Colour::White;
 use ansi_term::Style;
 use regex::Regex;
+use std::cmp::max;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fs::File;
+use std::io;
 use std::io::stderr;
 use std::io::stdin;
 use std::io::stdout;
@@ -20,11 +22,16 @@ use structopt::StructOpt;
 #[derive(StructOpt, Debug)]
 #[structopt(name = "trim")]
 struct Opt {
-    /// Files to trim. If empty or is '-', stdin will be used to grab lines.
+    /// file to trim; if '-' or not provided, stdin will be used
     #[structopt(parse(from_os_str))]
     pub file: Option<PathBuf>,
 }
 
+/// This is used to map `Err(err: D)` to `Err(std::io::Error)`.
+///
+/// # Returns
+///
+/// `std::io::Error` with `format!("{:?}", error)` as its content.
 #[inline]
 fn io_err<D>(error: D) -> Error
 where
@@ -33,60 +40,93 @@ where
     Error::new(ErrorKind::Other, format!("{:?}", error))
 }
 
-/// Return an iterator that iterates through a file line by line.
-fn readlines(path: &Path) -> Result<impl Iterator<Item = Result<String, Error>>, Error> {
+/// # Returns
+///
+/// An iterator that reads through the file under `path` line by line.
+#[inline]
+fn readlines(path: &Path) -> io::Result<impl Iterator<Item = io::Result<String>>> {
     File::open(path).map(BufReader::new).map(BufReader::lines)
 }
 
+/// Used to visualize the trimmed whitespace.
+///
+/// # Returns
+///
+/// Displayable struct, resulting in `length` chars with a red background and a white foreground,
+/// each with `'-'` as the text.
+#[inline]
 fn red_padding_with_len(length: usize) -> impl Display {
-    let padding: String = (0..length).map(|_| "_").collect();
-    Style::new().on(Red).fg(White).paint(padding)
+    Style::new()
+        .on(Red)
+        .fg(White)
+        .paint((0..length).map(|_| '_').collect::<String>())
 }
 
-fn handle<I>(lines: I) -> Result<(), Error>
+/// Call `handle_custom` with `stdout` as `out`, and `stderr` as `err`.
+///
+/// # Parameters
+///
+/// 1. `lines`: lines of file to trim
+#[inline]
+fn handle<I>(lines: I) -> io::Result<()>
 where
-    I: Iterator<Item = Result<String, Error>>,
+    I: Iterator<Item = io::Result<String>>,
 {
     handle_custom(lines, &mut stdout().lock(), &mut stderr().lock())
 }
 
-fn handle_custom<I, W1, W2>(lines: I, out: &mut W1, err: &mut W2) -> Result<(), Error>
+fn handle_custom<I, W1, W2>(lines: I, out: &mut W1, err: &mut W2) -> io::Result<()>
 where
-    I: Iterator<Item = Result<String, Error>>,
+    I: Iterator<Item = io::Result<String>>,
     W1: Write,
     W2: Write,
 {
     let t_ws = Regex::new(r"\s*$").map_err(io_err)?;
     let rtrim_w = |src: &str| t_ws.replace(src, "").to_string();
 
-    lines
-        .map(Result::unwrap)
+    // lf_count == number of trailing newlines
+    // lf_count + u8_saved == total number of bytes trimmed
+    let (lf_count, u8_saved) = lines
+        .map(io::Result::unwrap)
         .enumerate()
         .map(|(index, line)| (index + 1, line))
         .map(|(line_number, line)| {
             let trimmed_line = rtrim_w(&line);
-            let opt_visual = Some(line.len() - trimmed_line.len())
+            let length_diff = max(0, line.len() - trimmed_line.len());
+            let opt_visual = Some(length_diff)
                 .filter(|x| x > &0)
                 .map(red_padding_with_len)
-                .map(|padding| format!("{:>6}|{}{}", line_number, trimmed_line, padding));
-            (trimmed_line, opt_visual)
+                .map(|red_pad| format!("{:>6}|{}{}", line_number, trimmed_line, red_pad));
+            (trimmed_line, opt_visual, length_diff)
         })
         .fold(
-            Ok(0usize),
-            |opt_lf_count: Result<usize, Error>, (line, opt_vis)| match &opt_lf_count {
-                Ok(count) if line.len() == 0 => Ok(count + 1),
-                Ok(count) => {
-                    let lfs: String = (0..*count).map(|_| "\n").collect();
-                    write!(out, "{}", lfs)?; // accumulated line feeds
-                    write!(out, "{}\n", line)?; // actual line
-                    if let Some(vis) = opt_vis {
-                        write!(err, "{}\n", vis)?;
+            Ok((0usize, 0usize)), // (number of `\n` to print, total number of bytes trimmed)
+            |results: io::Result<(usize, usize)>, (line, opt_visual, u8_trimmed)| {
+                match &results {
+                    Ok((count, total)) if line.len() == 0 => Ok((count + 1, total + u8_trimmed)), // empty line encountered
+                    Ok((count, total)) => {
+                        // print the accumulated newlines, if any
+                        let lfs: String = (0..*count).map(|_| '\n').collect();
+                        write!(out, "{}", lfs)?;
+                        // print the actual line
+                        writeln!(out, "{}", line)?;
+
+                        // print the visual to err, if any
+                        match opt_visual {
+                            Some(visual) => {
+                                writeln!(err, "{}", visual)?;
+                                Ok((0, total + u8_trimmed))
+                            }
+                            None => Ok((0, *total)), // no `\n` to print
+                        }
                     }
-                    Ok(0)
+                    Err(_) => results,
                 }
-                Err(_) => opt_lf_count,
             },
         )?;
+
+    writeln!(err, "\n{:>6} trailing `\\n` trimmed", lf_count)?;
+    writeln!(err, "{:>6} bytes saved overall", u8_saved + lf_count)?;
 
     out.flush()?;
     err.flush()?;

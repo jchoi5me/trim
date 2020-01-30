@@ -1,6 +1,6 @@
 [package]
 name = "trim"
-version = "1.0.3"
+version = "1.1.0"
 authors = ["Jack <jchoi5@me.com>"]
 edition = "2018"
 description = "trim whitespaces from files"
