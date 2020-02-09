@@ -136,15 +136,15 @@ where
 fn main() {
     let args = Opt::from_args();
 
-    let (opt_path, use_stdin) = match args.file {
-        Some(path) if path.to_str() == Some("-") => (None, true),
-        Some(path) => (Some(path), false),
-        None => (None, true),
+    let opt_path = match args.file {
+        Some(path) if path.to_str() == Some("-") => None,
+        Some(path) => Some(path),
+        None => None,
     };
 
-    let result = match use_stdin {
-        true => handle(stdin().lock().lines()),
-        false => handle(readlines(&opt_path.unwrap()).unwrap()),
+    let result = match opt_path {
+        None => handle(stdin().lock().lines()),
+        Some(path) => handle(readlines(&path).unwrap()),
     };
     match result {
         Ok(_) => (),
