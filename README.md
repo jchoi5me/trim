@@ -14,8 +14,8 @@
 ```bash
 ~
   $ trim --help
-trim 1.2.0
-Jack <jchoi5@me.com>
+trim 1.2.1
+Jack <jackwchoi@pm.me>
 trim whitespaces from files
 
 USAGE:
