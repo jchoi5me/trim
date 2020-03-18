@@ -12,6 +12,6 @@ license = "MIT"
 [dependencies]
 ansi_term = "0.11"
 colmac = "0.1.1"
-rayon = "1.1"       
+rayon = "1.1"
 regex = "1"
-structopt = "0.2"  
+structopt = "0.2"
