@@ -14,17 +14,21 @@
 ```bash
 ~
   $ trim --help
-trim 0.1.5
+trim 1.2.0
 Jack <jchoi5@me.com>
 trim whitespaces from files
 
 USAGE:
-    trim [files]...
+    trim [FLAGS] [files]...
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help               Prints help information
+    -i, --in-place           trim <files> in-place, overwritting the content of the files atomically
+    -N, --supress-newline    suppress outputting the trailing `\n` in the last line
+    -S, --supress-summary    suppress summary
+    -V, --supress-visual     suppress visualizations of the trim
+        --version            Prints version information
 
 ARGS:
-    <files>...    Files to trim. If empty or is '-', stdin will be used to grab lines.
+    <files>...    files to trim; if '-' exists or none provided, stdin will be used
 ```
