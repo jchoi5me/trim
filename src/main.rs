@@ -82,6 +82,10 @@ fn main() {
         },
     };
 
+    // newline to separate summary from visual
+    if !suppress_summary {
+        eprint!("\n");
+    }
     // sum up all the exit codes, so if it's > 0, at least one error occurred
     let exit_code_sum: i32 = summaries
         .into_iter()

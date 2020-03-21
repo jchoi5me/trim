@@ -9,15 +9,15 @@ pub struct Opt {
     pub in_place: bool,
 
     /// suppress outputting the trailing `\n` in the last line
-    #[structopt(short = "N", long = "supress-newline")]
+    #[structopt(short = "N", long = "suppress-newline")]
     pub suppress_newline: bool,
 
     /// suppress summary
-    #[structopt(short = "S", long = "supress-summary")]
+    #[structopt(short = "S", long = "suppress-summary")]
     pub suppress_summary: bool,
 
     /// suppress visualizations of the trim
-    #[structopt(short = "V", long = "supress-visual")]
+    #[structopt(short = "V", long = "suppress-visual")]
     pub suppress_visual: bool,
 
     /// files to trim; if '-' exists or none provided, stdin will be used
