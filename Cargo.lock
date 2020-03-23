@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "trim"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "colmac 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
