@@ -1,5 +1,4 @@
 use rayon::prelude::*;
-use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs::copy;
@@ -144,9 +143,6 @@ where
     W: Write,
     E: Write,
 {
-    // regex for contiguous whitespace at the end of a line
-    let trailing_ws = Regex::new(r"\s*$").unwrap();
-
     // `lf_trimmed` = number of linebreaks encountered, but not written yet
     // `u8_trimmed` = number of bytes trimmed for sure
     //
@@ -156,7 +152,7 @@ where
         .enumerate()
         .map(|(index, line)| (index + 1, line) /* make 1-based */)
         .map(|(line_number, line)| {
-            let trimmed_line = trailing_ws.replace(&line, "").to_string(); // remove `\s*$`
+            let trimmed_line = line.trim_end().to_string();
             let bytes_saved = line.len() - trimmed_line.len();
             let visual_opt = Some(bytes_saved)
                 .filter(|x| x > &0)
